@@ -12,8 +12,7 @@ Dieses Dokument beschreibt, wie die Sicherheitslücken der "unsicheren" Version 
 5. [Verifizierung 3: UNION Injection (Fehlgeschlagen)](#5-verifizierung-3-union-injection-fehlgeschlagen)
 6. [Verifizierung 4: Profilmanipulation (Update Injection)](#6-verifizierung-4-profilmanipulation-update-injection)
 7. [Verifizierung 5: Error-Based Injection (Fehlgeschlagen)](#7-verifizierung-5-error-based-injection-fehlgeschlagen)
-8. [Verifizierung 6: Update Injection Test (Fehlgeschlagen)](#8-verifizierung-6-update-injection-test-fehlgeschlagen)
-9. [Ergebnis & Fazit](#9-ergebnis--fazit)
+8. [Ergebnis & Fazit](#8-ergebnis--fazit)
 
 ---
 
@@ -347,11 +346,11 @@ Versuch, im Email-Feld SQL-Code einzuschleusen, um das Passwort zu setzen.
 #### Testergebnis
 Der Angriff scheitert. Der SQL-Code wird nicht ausgeführt, sondern als Text gespeichert (oder abgelehnt).
 
-> 🖼️ **Beweis (Postman):** Der Server interpretiert den Input als String:
-> ![Profilmanipulation A Postman](Data/5_postman.png)
+> 🖼️ **Beweis (Resultat):**
+> ![Update Injection](Data/update.png)
 >
-> 🖼️ **Beweis (Backend-Log):** Keine SQL-Injection im Log sichtbar, sauberes UPDATE-Statement mit Platzhaltern:
-> ![Profilmanipulation A Log](Data/5_log.png)
+> 🖼️ **Beweis (Backend-Log):**
+> ![Update Injection Log](Data/update_log.png)
 
 ### 6.2 Szenario B: Komplexe Payload-Variante
 Ein weiterer Versuch mit einer variierten Syntax, um eventuelle schwache Filter zu umgehen.
@@ -360,10 +359,10 @@ Ein weiterer Versuch mit einer variierten Syntax, um eventuelle schwache Filter 
 Auch hier greifen die Sicherheitsmechanismen von Hibernate/JPA.
 
 > 🖼️ **Beweis (Postman):** Die Injection ist wirkungslos:
-> ![Profilmanipulation B Postman](Data/6_postman.png)
+> ![Profilmanipulation B Postman](Data/update2.png)
 >
 > 🖼️ **Beweis (Backend-Log):** Log bestätigt die sichere Verarbeitung:
-> ![Profilmanipulation B Log](Data/6_log.png)
+> ![Profilmanipulation B Log](Data/update2_log.png)
 
 ### Warum es fehlschlägt
 Hibernate nutzt konsequent **Prepared Statements** für Update-Operationen:
@@ -412,22 +411,7 @@ Zweiter Versuch mit einem alternativen Error-Based Payload.
 
 ---
 
-## 8. Verifizierung 6: Update Injection Test (Fehlgeschlagen)
-
-Zusätzlicher Test zur Manipulation von UPDATE-Statements.
-
-### Testergebnis
-Die Injection war nicht erfolgreich.
-
-> 🖼️ **Beweis (Resultat):**
-> ![Update Injection](Data/update.png)
->
-> 🖼️ **Beweis (Backend-Log):**
-> ![Update Injection Log](Data/update_log.png)
-
----
-
-## 9. Ergebnis & Fazit
+## 8. Ergebnis & Fazit
 
 Die Sicherheitsmaßnahmen wurden erfolgreich verifiziert. Alle Angriffe, die in der unsicheren Version möglich waren, wurden wirksam unterbunden.
 
