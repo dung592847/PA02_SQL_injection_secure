@@ -10,9 +10,9 @@ Dieses Dokument beschreibt, wie die Sicherheitslücken der "unsicheren" Version 
 3. [Verifizierung 1: Login Bypass (Fehlgeschlagen)](#3-verifizierung-1-login-bypass-fehlgeschlagen)
 4. [Verifizierung 2: Comment-Based Bypass (Fehlgeschlagen)](#4-verifizierung-2-comment-based-bypass-fehlgeschlagen)
 5. [Verifizierung 3: UNION Injection (Fehlgeschlagen)](#5-verifizierung-3-union-injection-fehlgeschlagen)
-6. [Verifizierung 4: Update Injection (Fehlgeschlagen)](#6-verifizierung-4-update-injection-fehlgeschlagen)
+6. [Verifizierung 4: Profilmanipulation (Update Injection)](#6-verifizierung-4-profilmanipulation-update-injection)
 7. [Verifizierung 5: Error-Based Injection (Fehlgeschlagen)](#7-verifizierung-5-error-based-injection-fehlgeschlagen)
-8. [Weitere Sicherheits-Checks](#8-weitere-sicherheits-checks)
+8. [Verifizierung 6: Update Injection Test (Fehlgeschlagen)](#8-verifizierung-6-update-injection-test-fehlgeschlagen)
 9. [Ergebnis & Fazit](#9-ergebnis--fazit)
 
 ---
@@ -280,11 +280,13 @@ Das Passwort wird zusätzlich in Java mit `passwordEncoder.matches()` geprüft, 
 
 ## 5. Verifizierung 3: UNION Injection (Fehlgeschlagen)
 
-### Der Angriff
+Wir haben **zwei Varianten** dieses Angriffs getestet, um sicherzustellen, dass keine Daten-Extraktion möglich ist.
+
+### Test 1: Basis-Injection
 Versuch, mittels UNION-Operator Daten aus anderen Tabellen zu extrahieren.
 - **Payload:** `' UNION SELECT null-- `
 
-### Testergebnis (Sichere Version)
+#### Testergebnis (Sichere Version)
 Die Anwendung führt die Injection nicht aus. Es werden keine sensiblen Daten preisgegeben.
 
 > 🖼️ **Beweis (Frontend):** Applikation bleibt stabil, kein unerwarteter Datenabfluss:
@@ -299,62 +301,129 @@ Die Anwendung führt die Injection nicht aus. Es werden keine sensiblen Daten pr
 > 🖼️ **Beweis (Backend-Log):** Log zeigt saubere Parameter-Bindung:
 > ![UNION Injection Backend Log](Data/3_log.png)
 
+### Test 2: Erweiterte Injection
+Ein weiterer Versuch mit einem komplexeren Payload, um Filtermethoden zu umgehen.
+
+#### Testergebnis (Variante 2)
+Auch dieser Angriff wird erfolgreich abgewehrt.
+
+> 🖼️ **Beweis (Frontend):** Keine Auswirkung auf die Darstellung oder Daten:
+> ![UNION Injection V2 Fehlgeschlagen](Data/4.png)
+>
+> 🖼️ **Beweis (Browser-Log):** Anfrage wird sicher verarbeitet:
+> ![UNION Injection V2 Browser Log](Data/4_browserlog.png)
+>
+> 🖼️ **Beweis (Postman):** API bleibt stabil:
+> ![UNION Injection V2 Postman](Data/4_postman.png)
+
+### Test 3: Data Extraction
+Versuch, Daten aus der Datenbank mittels Data Extraction Techniken zu exfiltrieren.
+
+#### Testergebnis (Sichere Version)
+Der Angriff läuft ins Leere. Keine Daten werden ausgegeben.
+
+> 🖼️ **Beweis (Frontend):**
+> ![Data Extraction](Data/dataextraction_png.png)
+>
+> 🖼️ **Beweis (Browser-Log):**
+> ![Data Extraction Browser Log](Data/dataextraction_browserlog.png)
+>
+> 🖼️ **Beweis (Backend-Log):**
+> ![Data Extraction Backend Log](Data/dataextraction_log.png)
+
 ### Warum es fehlschlägt
-Spring Data JPA verhindert strukturelle Änderungen an der Query.
+Spring Data JPA verhindert generell strukturelle Änderungen an der Query ("Query Structure Tampering"). Der gesamte Input – egal wie komplex – wird als *Wert* für einen einzigen Parameter behandelt.
 
 ---
 
-## 6. Verifizierung 4: Update Injection (Fehlgeschlagen)
+## 6. Verifizierung 4: Profilmanipulation (Update Injection)
 
-### Der Angriff
-Versuch, bei einem User-Update das Passwort über das Email-Feld zu überschreiben:
+Hier wurde versucht, durch Manipulation der Profil-Updates (Name, Email, etc.) andere Felder (wie das Passwort) unautorisiert zu ändern.
+
+### 6.1 Szenario A: Update im Email-Feld
+Versuch, im Email-Feld SQL-Code einzuschleusen, um das Passwort zu setzen.
 - **Payload:** `test@example.com', password='HACKED`
 
-### Testergebnis (Sichere Version)
-Die Manipulation scheitert. Das Feld wird als reiner Text gespeichert, nicht als SQL-Befehl interpretiert.
+#### Testergebnis
+Der Angriff scheitert. Der SQL-Code wird nicht ausgeführt, sondern als Text gespeichert (oder abgelehnt).
 
-> 🖼️ **Beweis (Frontend):** Darstellung der "kaputten" Email-Adresse (der Angriff wurde als Text gespeichert):
-> ![Update Injection Frontend Beweis](Data/4.png)
+> 🖼️ **Beweis (Postman):** Der Server interpretiert den Input als String:
+> ![Profilmanipulation A Postman](Data/5_postman.png)
 >
-> 🖼️ **Beweis (Browser-Log):** Request wird verarbeitet, aber semantisch sicher:
-> ![Update Injection Browser Log](Data/4_browserlog.png)
+> 🖼️ **Beweis (Backend-Log):** Keine SQL-Injection im Log sichtbar, sauberes UPDATE-Statement mit Platzhaltern:
+> ![Profilmanipulation A Log](Data/5_log.png)
+
+### 6.2 Szenario B: Komplexe Payload-Variante
+Ein weiterer Versuch mit einer variierten Syntax, um eventuelle schwache Filter zu umgehen.
+
+#### Testergebnis
+Auch hier greifen die Sicherheitsmechanismen von Hibernate/JPA.
+
+> 🖼️ **Beweis (Postman):** Die Injection ist wirkungslos:
+> ![Profilmanipulation B Postman](Data/6_postman.png)
 >
-> 🖼️ **Beweis (Postman):** API nimmt die Daten als String entgegen:
-> ![Update Injection Postman](Data/4_postman.png)
+> 🖼️ **Beweis (Backend-Log):** Log bestätigt die sichere Verarbeitung:
+> ![Profilmanipulation B Log](Data/6_log.png)
 
 ### Warum es fehlschlägt
-Hibernate nutzt Prepared Statements (`UPDATE ... SET email = ?`). Der gesamte Payload wird in das Email-Feld geschrieben. Das Passwort-Feld bleibt unberührt.
+Hibernate nutzt konsequent **Prepared Statements** für Update-Operationen:
+```sql
+UPDATE users SET email = ? WHERE id = ?
+```
+Der gesamte Payload (inklusive Kommas und SQL-Keywords) wird in den Parameter `?` eingefügt. Die Datenbankstruktur bleibt unverändert, und es ist unmöglich, aus dem vorgesehenen Feld auszubrechen und andere Spalten (`password`) zu manipulieren.
+
+---
 
 ---
 
 ## 7. Verifizierung 5: Error-Based Injection (Fehlgeschlagen)
 
-### Der Angriff
-Versuch, Datenbank-interna durch Syntaxfehler zu leaken.
+Wir prüfen, ob die Datenbank detaillierte Fehlermeldungen ausgibt, die für Angriffe genutzt werden können.
 
-### Testergebnis (Sichere Version)
-Keine SQL-Fehlermeldungen im Frontend oder in der API-Antwort.
+### Test 1
+Versuch, einen SQL-Fehler zu provozieren.
 
-> 🖼️ **Beweis (Postman):** Generische Fehlermeldung statt Stacktrace:
-> ![Error Injection Postman](Data/5_postman.png)
+> 🖼️ **Beweis (Frontend):**
+> ![Error Based 1](Data/errorbased.png)
 >
-> 🖼️ **Beweis (Backend-Log):** Logs fangen die Exception ab, geben sie aber nicht nach außen:
-> ![Error Injection Log](Data/5_log.png)
+> 🖼️ **Beweis (Postman):**
+> ![Error Based 1 Postman](Data/errorbased_postman.png)
+>
+> 🖼️ **Beweis (Browser-Log):**
+> ![Error Based 1 Browser Log](Data/errorbased_browserlog.png)
+>
+> 🖼️ **Beweis (Backend-Log):**
+> ![Error Based 1 Backend Log](Data/errorbased_log.png)
 
-### Warum es fehlschlägt
-Spring Boot Production-Settings unterdrücken Stacktraces.
+### Test 2
+Zweiter Versuch mit einem alternativen Error-Based Payload.
+
+> 🖼️ **Beweis (Frontend):**
+> ![Error Based 2](Data/errorbased2.png)
+>
+> 🖼️ **Beweis (Postman):**
+> ![Error Based 2 Postman](Data/errorbased2_postman.png)
+>
+> 🖼️ **Beweis (Browser-Log):**
+> ![Error Based 2 Browser Log](Data/errorbased2_browserlog.png)
+>
+> 🖼️ **Beweis (Backend-Log):**
+> ![Error Based 2 Backend Log](Data/errorbased2_log.png)
 
 ---
 
-## 8. Weitere Sicherheits-Checks
+## 8. Verifizierung 6: Update Injection Test (Fehlgeschlagen)
 
-Überprüfung weiterer Varianten und Randfälle.
+Zusätzlicher Test zur Manipulation von UPDATE-Statements.
 
-> 🖼️ **Beweis (Postman):** Auch komplexe Payloads scheitern:
-> ![Check Variante Postman](Data/6_postman.png)
+### Testergebnis
+Die Injection war nicht erfolgreich.
+
+> 🖼️ **Beweis (Resultat):**
+> ![Update Injection](Data/update.png)
 >
-> 🖼️ **Beweis (Backend-Log):** Saubere Logs:
-> ![Check Variante Log](Data/6_log.png)
+> 🖼️ **Beweis (Backend-Log):**
+> ![Update Injection Log](Data/update_log.png)
 
 ---
 
@@ -365,7 +434,8 @@ Die Sicherheitsmaßnahmen wurden erfolgreich verifiziert. Alle Angriffe, die in 
 > 🖼️ **Gesamtergebnis:** Der finale Zustand zeigt keine Kompromittierung:
 > ![Testergebnis](Data/Ergebnis.png)
 
-1. **Login:** Sicher durch Prepared Statements.
-2. **Daten:** Sicher, keine Leakage via UNION.
-3. **Profil:** Sicher, keine Parameter Manipulation möglich.
-4. **Fehler:** Sicher, Information Hiding aktiv.
+### Zusammenfassung der Schutzmaßnahmen
+
+1. **Login:** Sicher durch Prepared Statements (beide Union-Tests fehlgeschlagen).
+2. **Profil:** Sicher durch JPA/Hibernate Objekt-Mapping (Beide Update-Manipulationsversuche fehlgeschlagen).
+3. **Daten:** Keine Leakage, Integrität gewahrt.
