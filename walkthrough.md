@@ -411,9 +411,49 @@ Zweiter Versuch mit einem alternativen Error-Based Payload.
 
 ---
 
+
+## 8. Schutzmaßnahmen im Detail
+
+Im Folgenden werden die wichtigsten Schutzmechanismen erläutert, die in der sicheren Version implementiert wurden. Für jede Maßnahme ist der relevante Codeabschnitt angegeben:
+
+
+1. **Prepared Statements**  
+  Alle Datenbankabfragen, insbesondere beim Login und bei Profil-Updates, werden mit Prepared Statements ausgeführt. Dadurch wird Benutzereingabe niemals direkt in SQL-Statements eingebettet, sondern immer als Parameter behandelt.  
+  **Explizite Code-Stellen:**
+  - [UserRepository.java](backend/src/main/java/com/example/demo/repository/UserRepository.java): Die Methode `Optional<User> findByUsername(String username);` ist mit `@Query`/Spring Data JPA automatisch als Prepared Statement implementiert.
+  - [AuthController.java](backend/src/main/java/com/example/demo/controller/AuthController.java): Siehe Methode `login()`, wo das Repository mit Benutzereingaben aufgerufen wird.
+  - [UserController.java](backend/src/main/java/com/example/demo/controller/UserController.java): Siehe Methoden für Profil-Updates, z.B. `updateProfile()`.
+
+2. **JPA/Hibernate Objekt-Mapping**  
+  Für alle Datenbankoperationen wird das Spring Data JPA Repository verwendet. JPA/Hibernate generiert die SQL-Statements automatisch und nutzt intern immer Prepared Statements. Dadurch sind auch komplexe Angriffe wie UNION-Injection oder Update-Manipulation wirkungslos.  
+  **Explizite Code-Stellen:**
+  - [UserRepository.java](backend/src/main/java/com/example/demo/repository/UserRepository.java): Interface erweitert `JpaRepository`, alle Methoden sind sicher.
+  - [User.java](backend/src/main/java/com/example/demo/entity/User.java): Die Entity ist mit `@Entity` annotiert, Felder sind als Spalten definiert.
+
+3. **Passwort-Hashing**  
+  Passwörter werden nicht im Klartext gespeichert oder verglichen. Die Authentifizierung nutzt sichere Hashing-Algorithmen (z.B. BCrypt), sodass SQL-Kommentare oder Manipulationen im Passwortfeld keine Wirkung haben.  
+  **Explizite Code-Stellen:**
+  - [SecurityConfig.java](backend/src/main/java/com/example/demo/config/SecurityConfig.java): Bean `PasswordEncoder` mit BCrypt.
+  - [AuthController.java](backend/src/main/java/com/example/demo/controller/AuthController.java): Methoden `register()` und `login()` verwenden `passwordEncoder.encode()` und `passwordEncoder.matches()`.
+
+4. **Fehlerbehandlung**  
+  Fehlermeldungen der Datenbank werden nicht an den Client weitergegeben. Stattdessen gibt es generische Fehlermeldungen, sodass Angreifer keine Details über die Datenbankstruktur oder Query-Fehler erhalten.  
+  **Explizite Code-Stellen:**
+  - [AuthController.java](backend/src/main/java/com/example/demo/controller/AuthController.java): try-catch-Blöcke und ResponseEntity mit generischen Fehlermeldungen.
+  - [UserController.java](backend/src/main/java/com/example/demo/controller/UserController.java): Fehler werden abgefangen und als allgemeine Fehlerantwort zurückgegeben.
+
+5. **Keine Datenlecks**  
+  Alle Angriffe auf Datenextraktion (z.B. mit UNION oder Error-Based Payloads) laufen ins Leere, da die Anwendung keine sensiblen Daten preisgibt und alle Eingaben sicher verarbeitet.  
+  **Explizite Code-Stellen:**
+  - [UserController.java](backend/src/main/java/com/example/demo/controller/UserController.java): Rückgabe von DTOs statt Entities, keine sensiblen Felder im Response.
+  - [AuthController.java](backend/src/main/java/com/example/demo/controller/AuthController.java): Nur notwendige Daten werden im Response gesendet.
+
 ## 8. Ergebnis & Fazit
 
-Die Sicherheitsmaßnahmen wurden erfolgreich verifiziert. Alle Angriffe, die in der unsicheren Version möglich waren, wurden wirksam unterbunden.
+
+Die Sicherheitsmaßnahmen wurden erfolgreich verifiziert. Alle Angriffe, die in der unsicheren Version möglich waren, wurden effektiv verhindert.
+
+---
 
 > 🖼️ **Gesamtergebnis:** Der finale Zustand zeigt keine Kompromittierung:
 > ![Testergebnis](Data/Ergebnis.png)
@@ -422,4 +462,4 @@ Die Sicherheitsmaßnahmen wurden erfolgreich verifiziert. Alle Angriffe, die in 
 
 1. **Login:** Sicher durch Prepared Statements (beide Union-Tests fehlgeschlagen).
 2. **Profil:** Sicher durch JPA/Hibernate Objekt-Mapping (Beide Update-Manipulationsversuche fehlgeschlagen).
-3. **Daten:** Keine Leakage, Integrität gewahrt.
+3. **Daten:** Integrität gewahrt, Keine Leakage.
